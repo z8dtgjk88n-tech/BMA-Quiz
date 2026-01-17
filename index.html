@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>BMA-Quiz – Browser-Version (1 Datei)</title>
+<style>
+  :root{
+    --bg:#f4f4f4; --card:#ffffff; --text:#111; --muted:#555; --accent:#b30000;
+    --btn:#eeeeee; --btnHover:#e2e2e2; --ok:#a5d6a7; --bad:#ef9a9a;
+    --shadow: 0 8px 18px rgba(0,0,0,.08); --radius: 14px;
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color: transparent; }
+  body{ margin:0; font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; background:var(--bg); color:var(--text); line-height:1.35; }
+  .wrap{ min-height:100svh; padding:14px 14px calc(14px + env(safe-area-inset-bottom)); display:flex; align-items:center; justify-content:center; }
+  .card{ width:min(720px,100%); background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px; }
+  header{ display:flex; gap:12px; align-items:center; justify-content:space-between; margin-bottom:12px; }
+  .title{ display:flex; flex-direction:column; gap:2px; }
+  h1{ margin:0; font-size:clamp(18px,4.8vw,24px); color:var(--accent); }
+  .meta{ font-size:13px; color:var(--muted); }
+  .progress{ display:flex; flex-direction:column; gap:6px; align-items:flex-end; min-width:120px; }
+  .pill{ font-size:12px; color:var(--muted); background:#f0f0f0; padding:6px 10px; border-radius:999px; white-space:nowrap; }
+  .bar{ width:120px; height:8px; background:#eee; border-radius:999px; overflow:hidden; }
+  .bar>div{ height:100%; width:0%; background:var(--accent); transition:width .25s ease; }
+  .q{ margin:10px 0 12px; font-size:clamp(16px,4.6vw,20px); font-weight:650; }
+  .answers{ display:grid; gap:10px; }
+  button.answer{
+    width:100%; text-align:left; border:1px solid #ddd; background:var(--btn);
+    border-radius:12px; padding:14px; font-size:16px; font-weight:600; cursor:pointer;
+    transition:transform .02s ease, background .15s ease; touch-action:manipulation;
+  }
+  button.answer:active{ transform:scale(.99); }
+  button.answer:hover{ background:var(--btnHover); }
+  button.answer[disabled]{ opacity:.95; cursor:default; }
+  .correct{ background:var(--ok) !important; border-color:rgba(0,0,0,.08); }
+  .wrong{ background:var(--bad) !important; border-color:rgba(0,0,0,.08); }
+  .controls{ display:flex; gap:10px; margin-top:14px; }
+  .btn{
+    flex:1; border:none; border-radius:12px; padding:14px; font-size:16px; font-weight:700;
+    cursor:pointer; background:var(--accent); color:#fff; touch-action:manipulation;
+  }
+  .btn.secondary{ background:#333; }
+  .btn:disabled{ opacity:.45; cursor:not-allowed; }
+  .feedback{ margin-top:10px; font-size:14px; color:var(--muted); min-height:20px; }
+  .score{ margin-top:16px; padding:14px; border-radius:12px; background:#fafafa; border:1px solid #eee; font-size:16px; }
+
+  /* Zertifikat */
+  #certificate .cert{ padding:18px; }
+  #certificate h2{ margin:0 0 10px; font-size:clamp(18px,5vw,26px); color:var(--accent); text-align:center; }
+  .cert-box{ border:2px solid #eee; border-radius:14px; padding:18px; background:#fff; }
+  .cert-name{ text-align:center; font-size:clamp(20px,6vw,30px); font-weight:800; margin:8px 0 10px; }
+  .cert-small{ text-align:center; color:var(--muted); margin-top:12px; font-size:14px; }
+  .cert-actions{ display:flex; gap:10px; margin-top:14px; }
+
+  @media (max-width:380px){
+    .card{ padding:14px; }
+    button.answer{ padding:12px; }
+    .btn{ padding:12px; }
+    .bar{ width:100px; }
+    .cert-box{ padding:14px; }
+  }
+
+  @media print{
+    body{ background:white; }
+    .wrap{ display:block; padding:0; }
+    main.card{ display:none; }
+    #certificate{ display:block !important; }
+    #certificate .card{ box-shadow:none; border:none; }
+    .cert-actions{ display:none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <main class="card" role="application" aria-label="BMA Quiz">
+    <header>
+      <div class="title">
+        <h1>🚒 BMA-Quiz</h1>
+        <div class="meta">Browser-Version (eine Datei) · inkl. Zertifikat</div>
+      </div>
+      <div class="progress" aria-live="polite">
+        <div class="pill" id="counter">Frage 1/10</div>
+        <div class="bar" aria-hidden="true"><div id="barFill"></div></div>
+      </div>
+    </header>
+
+    <section>
+      <div class="q" id="question"></div>
+      <div class="answers" id="answers"></div>
+
+      <div class="feedback" id="feedback" aria-live="polite"></div>
+
+      <div class="controls">
+        <button class="btn secondary" id="restartBtn" onclick="restart()" type="button">Neu starten</button>
+        <button class="btn" id="nextBtn" onclick="nextQuestion()" type="button" disabled>Nächste</button>
+      </div>
+
+      <div class="score" id="scoreBox" style="display:none;"></div>
+
+      <div class="score" style="margin-top:12px; font-size:13px; color:#555;">
+        iPhone/iPad-Hinweis: Wenn die Datei in „Dateien“ nicht direkt startet, nutze <strong>Teilen ⤴︎ → In Safari öffnen</strong>.
+      </div>
+    </section>
+  </main>
+
+  <!-- Zertifikat -->
+  <section id="certificate" style="display:none; width:min(720px,100%);">
+    <div class="card cert">
+      <div class="cert-box">
+        <h2>🎓 Teilnahmezertifikat</h2>
+        <p style="text-align:center; margin:0;">Hiermit wird bestätigt, dass</p>
+        <div class="cert-name" id="certName">—</div>
+
+        <p style="text-align:center; margin:0;">
+          das Quiz <strong>„Vorgehen bei ausgelöster Brandmeldeanlage (BMA)“</strong><br>
+          erfolgreich bestanden hat.
+        </p>
+
+        <p style="text-align:center; margin-top:12px;">
+          Ergebnis: <strong><span id="certScore">0</span>%</strong>
+        </p>
+
+        <p class="cert-small">
+          Datum: <span id="certDate">—</span><br>
+          Bestehensgrenze: <span id="certPass">80</span>%
+        </p>
+      </div>
+
+      <div class="cert-actions">
+        <button class="btn secondary" type="button" onclick="backToQuiz()">⬅️ Zurück zum Quiz</button>
+        <button class="btn" type="button" onclick="window.print()">📄 Drucken / Als PDF speichern</button>
+      </div>
+
+      <p class="cert-small">Hinweis: Zertifikat wird lokal im Browser erstellt (keine Datenübertragung).</p>
+    </div>
+  </section>
+</div>
+
+<script>
+const PASS_PERCENT = 80;
+
+const quiz = [
+  { question:"Wovon ist bei einer ausgelösten Brandmeldeanlage grundsätzlich auszugehen?",
+    answers:["Fehlalarm","Technischer Defekt","Brandereignis","Wartung"], correct:2,
+    explain:"Grundsätzlich ist von einem Brandereignis auszugehen."},
+  { question:"Wer entscheidet über den Abbruch der Alarmfahrt (z. B. bei Rückruf)?",
+    answers:["Leitstelle","Objektbetreiber","Einsatzleiter","Maschinist"], correct:2,
+    explain:"Die Entscheidung liegt beim Einsatzleiter."},
+  { question:"Welche Ausrüstung ist für den Angriffstrupp bei der Anfahrt vorgesehen?",
+    answers:["PA mit angeschlossenem Lungenautomaten","PA ohne angeschlossenen Lungenautomaten","Keine besondere Ausrüstung","CSA"], correct:1,
+    explain:"PA ja – Lungenautomat nicht angeschlossen."},
+  { question:"Warum sollen Objektschlüssel immer aus dem FSD entnommen werden (wenn vorhanden)?",
+    answers:["Damit die BMA automatisch zurückstellt","Damit sicher alle Objektschlüssel verfügbar sind","Weil die Polizei es fordert","Weil sonst die FIZ nicht funktioniert"], correct:1,
+    explain:"Nur so sind wirklich alle Objektschlüssel verfügbar."},
+  { question:"Wo bekommt die Feuerwehr den schnellsten Überblick über die Ausdehnung des Ereignisses?",
+    answers:["Am Haupteingang","An der BMZ/FIZ","Im Treppenraum","Am ausgelösten Handfeuermelder"], correct:1,
+    explain:"BMZ/FIZ ist der zentrale Informationspunkt."},
+  { question:"Was bewirkt die Taste „Summer ab“ am FAT/der Anlage?",
+    answers:["Schaltet den Räumungsalarm im Objekt ab","Schaltet nur den Hinweiston der BMA ab","Stellt die BMA zurück","Deaktiviert die Meldergruppe"], correct:1,
+    explain:"Sie schaltet nur den Hinweiston der BMA ab."},
+  { question:"Wie ist bei automatischen Meldern grundsätzlich zu erkunden?",
+    answers:["Nur den Raum des ausgelösten Melders","Nur den Bereich um den Melder","Den kompletten Meldergruppenbereich, ggf. Brandabschnitt","Gar nicht – warten auf Betreiber"], correct:2,
+    explain:"Kompletter Meldergruppenbereich (ggf. Brandabschnitt) ist zu erkunden."},
+  { question:"Wie ist bei ausgelöstem Handfeuermelder zu erkunden?",
+    answers:["Nur den Treppenraum","Nur das Stockwerk der Meldergruppe","Alle zugänglichen Bereiche des kompletten Objekts/Gebäudes","Nur die BMZ kontrollieren"], correct:2,
+    explain:"Alle zugänglichen Bereiche des kompletten Objekts erkunden."},
+  { question:"Darf die Feuerwehr eine Meldergruppe/Melder außer Betrieb nehmen?",
+    answers:["Ja, bei häufigen Fehlalarmen","Ja, wenn der Betreiber zustimmt","Nein, niemals","Nur mit Zustimmung der Leitstelle"], correct:2,
+    explain:"Nein, niemals."},
+  { question:"Wann darf die BMA zurückgestellt werden?",
+    answers:["Immer sofort nach Erkundung","Nur wenn das auslösende Kriterium nicht mehr anliegt","Erst nach Unterschrift des Betreibers","Nur durch die Leitstelle"], correct:1,
+    explain:"Nur wenn das auslösende Kriterium nicht mehr anliegt."}
+];
+
+let current = 0, score = 0, answered = false;
+
+const questionEl = document.getElementById("question");
+const answersEl  = document.getElementById("answers");
+const nextBtn    = document.getElementById("nextBtn");
+const counterEl  = document.getElementById("counter");
+const barFill    = document.getElementById("barFill");
+const feedbackEl = document.getElementById("feedback");
+const scoreBox   = document.getElementById("scoreBox");
+
+function render() {
+  answered = false;
+  nextBtn.disabled = true;
+  feedbackEl.textContent = "";
+  scoreBox.style.display = "none";
+  scoreBox.textContent = "";
+
+  const q = quiz[current];
+  questionEl.textContent = q.question;
+  answersEl.innerHTML = "";
+
+  counterEl.textContent = `Frage ${current + 1}/${quiz.length}`;
+  barFill.style.width = `${((current) / quiz.length) * 100}%`;
+
+  q.answers.forEach((a, idx) => {
+    const btn = document.createElement("button");
+    btn.className = "answer";
+    btn.type = "button";
+    btn.textContent = a;
+    btn.addEventListener("click", () => choose(btn, idx));
+    answersEl.appendChild(btn);
+  });
+}
+
+function choose(btn, idx) {
+  if (answered) return;
+  answered = true;
+
+  const q = quiz[current];
+  const buttons = [...answersEl.querySelectorAll("button")];
+  buttons.forEach(b => b.disabled = true);
+
+  if (idx === q.correct) {
+    btn.classList.add("correct");
+    score++;
+    feedbackEl.textContent = "✅ Richtig. " + q.explain;
+  } else {
+    btn.classList.add("wrong");
+    buttons[q.correct].classList.add("correct");
+    feedbackEl.textContent = "❌ Falsch. " + q.explain;
+  }
+
+  nextBtn.disabled = false;
+  barFill.style.width = `${((current + 1) / quiz.length) * 100}%`;
+}
+
+function nextQuestion() {
+  if (current < quiz.length - 1) {
+    current++;
+    render();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } else {
+    finish();
+  }
+}
+
+function finish() {
+  questionEl.textContent = "Quiz beendet 🚒";
+  answersEl.innerHTML = "";
+  nextBtn.disabled = true;
+  feedbackEl.textContent = "";
+
+  const pct = Math.round((score / quiz.length) * 100);
+
+  scoreBox.style.display = "block";
+  scoreBox.innerHTML = `<strong>Ergebnis:</strong> ${score} von ${quiz.length} Punkten (${pct}%)`;
+
+  counterEl.textContent = "Fertig";
+  barFill.style.width = "100%";
+
+  if (pct >= PASS_PERCENT) {
+    document.getElementById("certPass").textContent = PASS_PERCENT;
+
+    let name = "";
+    while (name !== null && name.trim() === "") {
+      name = prompt("Bestanden ✅\nBitte Vor- und Nachname für das Zertifikat eingeben:");
+      if (name === null) break;
+    }
+    if (name && name.trim() !== "") showCertificate(name.trim(), pct);
+  } else {
+    scoreBox.innerHTML += `<br><span style="color:#b30000;">❌ Leider nicht bestanden (mind. ${PASS_PERCENT}% erforderlich)</span>`;
+  }
+}
+
+function showCertificate(name, pct) {
+  document.getElementById("certName").textContent = name;
+  document.getElementById("certScore").textContent = pct;
+  document.getElementById("certDate").textContent = new Date().toLocaleDateString("de-DE");
+
+  document.querySelector("main.card").style.display = "none";
+  document.getElementById("certificate").style.display = "block";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function backToQuiz() {
+  document.getElementById("certificate").style.display = "none";
+  document.querySelector("main.card").style.display = "block";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function restart() {
+  current = 0; score = 0;
+  backToQuiz();
+  render();
+}
+
+render();
+</script>
+</body>
+</html>
